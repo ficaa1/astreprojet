@@ -212,7 +212,7 @@ VAR
   processor: Processor;
   memory: Memory(bus);
   cache: Cache(bus, processor, cacheL1);
-  
+  --Initiation des modules
 
 ASSIGN
   
@@ -225,8 +225,7 @@ ASSIGN
       bus.cacheValid | bus.arb_gnt = mem:               mem; -- si le cache a effectuer une requete, la memoire reprend l'acces au bus au prochain cycle
       TRUE:                                             none; -- default bus master is none 
     esac;
-
-  ------------- bus out values -------------
+  ------------- bus valeurs de sortie -------------
   bus.AD :=
     case
       bus.arb_gnt = cacheL1: cache.AD;
@@ -249,46 +248,43 @@ ASSIGN
     esac;
 
 --------------------------- Specifications ---------------------------
- -- there is a branch where mem is infinitely often the master
-SPEC EG EF(bus.arb_gnt = mem)
- -- there is a branch where cacheL1 is infinitely often the master
-SPEC EG EF(bus.arb_gnt = cacheL1)
-
+SPEC EG EF(bus.arb_gnt = mem) -- on a un scenario où la memoire prend infiniment souvent la main sur le bus
+SPEC EG EF(bus.arb_gnt = cacheL1) -- on a un scenario où le cache prend infiniment souvent la main sur le bus
 
 ----------------- Specifications bus --------------------
--- if cacheL1 is bus master, then bus out must be l1_in --
+-- Si le cache est maître du bus, alors la sortie du bus doit être l'entrée du cache
 SPEC AG ( (bus.arb_gnt = cacheL1) -> (bus.AD = cache.AD & bus.DT = cache.DT & bus.CTRL = cache.CTRL & bus.valid = cache.valid) )
--- if mem is bus master, then bus out must be mem_in --
+-- Si la mémoire est maître du bus, alors la sortie du bus doit être l'entrée de la mémoire
 SPEC AG ( (bus.arb_gnt = mem) -> (bus.AD = memory.AD & bus.DT = memory.DT & bus.valid = memory.valid) )
--- if bus is cacheL1 then it should also be valid (not yes respected) --
+-- Si le cache est maître du bus, alors le bus doit être valide
 -- SPEC AG ( (bus.arb_gnt = cacheL1) -> (bus.valid) )
 
 ---------------- Specifications  cache -------------------
--- if cacheL1 reads data, then next value in bus is the requested value and memory response takes 2 cycles --
+-- Si le cache lit des données, alors la prochaine valeur dans le bus est la valeur demandée et la réponse de la requête prend 2 cycles à s'éxecuter
 SPEC AG ( (bus.valid & bus.arb_gnt = cacheL1 & bus.CTRL = read) -> AX AX (bus.DT = memory.data[cache.AD] & memory.valid) )
 SPEC EG EF(bus.valid & bus.arb_gnt = cacheL1 & bus.CTRL = read)
--- if cacheL1 writes data, then next value in memory is the written value and memory response takes 2 cycles --
+-- Si le cache écrit des données, alors la prochaine valeur en mémoire est la valeur écrite par le cache et le tout prend 2 cycles 
 SPEC AG ( (bus.valid & bus.arb_gnt = cacheL1 & bus.CTRL = write) -> AX AX (memory.data[cache.AD] = cache.DT & memory.valid) )
 SPEC EG EF(bus.valid & bus.arb_gnt = cacheL1 & bus.CTRL = write)
--- if proc reads data present in cache, then response should be the value of the cache register and should be next cycle --
+-- Si le CPU lit des données présentes dans le cache, la réponse prendra un cycle et devra être la valeur du registre du cache 
 SPEC AG ( (processor.req = load & processor.AD = cache.TAG & !processor.valid) -> AX (processor.DT = cache.VAL & processor.valid) )
 SPEC EG EF(processor.req = load & processor.AD = cache.TAG & !processor.valid)
 
 -------------- Specifications processor -----------------
 SPEC EG EF(processor.valid & processor.req != idle)
--- if proc read a data, the the read value must be the same as the one in memory --
+-- Si le CPU lit une donnée, alors la valeur lue doit être la même que celle en mémoire (Cohérence de données)
 SPEC AG ( (processor.valid & processor.req = load) -> (processor.DT = memory.data[processor.AD]) )
--- if proc read a data, the the read value must be the same as the one in memory --
+-- Si le CPU écrit une donnée en mémoire, alors la valleur de celle-ci est la même que celle en mémoire
 SPEC AG ( (processor.valid & processor.req = store) -> (processor.VAL = memory.data[processor.AD]) )
--- processor can quit idle req state --
+-- Le CPU n'est pas bloqué en mode Idle (Vivacité)
 SPEC AG ( (processor.req = idle) -> EF (processor.req != idle) )
--- processor can quit load req state --
+-- Le CPU n'est pas bloqué en mode Load (Vivacité)
 SPEC AG ( (processor.req = load) -> EF (processor.req != load) )
--- processor can quit store req state --
+-- Le CPU n'est pas bloqué en mode Store (Vivacité)
 SPEC AG ( (processor.req = store) -> EF (processor.req != store) )
 
----------------- other -------------------
--- verify that there are branches whith these cases --
+---------------- tests -------------------
+-- Assurer que des évenements auront lieu
 SPEC EG EF(memory.data[0] = TRUE)
 SPEC EG EF(memory.data[0] = FALSE)
 SPEC EG EF(memory.data[1] = TRUE)
